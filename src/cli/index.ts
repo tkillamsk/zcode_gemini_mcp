@@ -17,7 +17,8 @@ program
   .command('login')
   .description('Add a new Google account via OAuth')
   .argument('[label]', 'Optional label for the account')
-  .action(login);
+  .option('-p, --project <id>', 'Google Cloud project ID')
+  .action((label, opts) => login(label, opts.project));
 
 program
   .command('status')
