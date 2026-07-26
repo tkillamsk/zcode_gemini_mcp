@@ -17,3 +17,7 @@ export const COOLDOWN_MS = 60_000; // 1 minute
 export const MAX_COOLDOWN_MS = 30 * 60_000; // 30 minutes
 export const MAX_CONSECUTIVE_ERRORS = 5;
 export const BACKOFF_BASE_MS = 60_000;
+
+// ── Config file (remembers project per email) ──
+
+export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');

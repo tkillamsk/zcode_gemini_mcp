@@ -1,76 +1,71 @@
-# Gemini ↔︎ OpenAI Proxy
+# gemini-openai-proxy
 
-This program is a [Gemini CLI](https://github.com/google-gemini/gemini-cli) wrapper that can serve **Google Gemini 2.5 Pro** (or Flash) through an **OpenAI-compatible API**.
-Plug-and-play with clients that already speak OpenAI like SillyTavern, llama.cpp, LangChain, the VS Code *Cline* extension, etc.
+OpenAI-compatible proxy for Gemini Code Assist with multi-account OAuth rotation.
 
----
-
-## Features
-
-| ✔ | Feature | Notes |
-|---|---------|-------|
-| `/v1/chat/completions` | Non-stream & stream (SSE) | Works with curl, ST, LangChain… |
-| Vision support | `image_url` → Gemini `inlineData` | |
-| Function / Tool calling | OpenAI “functions” → Gemini Tool Registry | |
-| Reasoning / chain-of-thought | Sends `enable_thoughts:true`, streams `<think>` chunks | ST shows grey bubbles |
-| 1 M-token context | Proxy auto-lifts Gemini CLI’s default 200 k cap | |
-| CORS | Enabled (`*`) by default | Ready for browser apps |
-
----
-
-## Quick start
-
-### With npm
+## Quick Start
 
 ```bash
-git clone https://github.com/Brioch/gemini-openai-proxy
-cd gemini-openai-proxy
-npm i
-npm start # launch (runs on port 11434 by default)
+# 1. Login with one or more Google accounts
+npx ts-node bin/gemini-multi-auth.js login <label>
+
+# 2. Start proxy
+./start.sh
+
+# 3. Use it
+curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini-2.5-pro","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-### With Docker
-
-Alternatively, you can use the provided Dockerfile to build a Docker image.
-
-```sh
-docker build --tag "gemini-openai-proxy" .
-docker run -p 11434:80 -e GEMINI_API_KEY gemini-openai-proxy
-```
-
-### Optional env vars
-
-```sh
-PORT=11434
-
-# can be any of 'oauth-personal', 'gemini-api-key', 'vertex-ai'. Use oauth-personal for free access to Gemini 2.5 Pro by logging in to a Google account.
-AUTH_TYPE='gemini-api-key' 
-
-# API key is only used with AUTH_TYPE='gemini-api-key'
-GEMINI_API_KEY=
-
-# Use 'gemini-2.5-flash' or 'gemini-2.5-pro'. Leave empty to let CLI choose its default model.
-MODEL=
-```
-
-### Minimal curl test
+## CLI Commands
 
 ```bash
-curl -X POST http://localhost:11434/v1/chat/completions \
-     -H "Content-Type: application/json" \
-     -d '{
-       "model": "gemini-2.5-pro-latest",
-       "messages":[{"role":"user","content":"Hello Gemini!"}]
-     }'
+# Add account (opens browser for OAuth)
+npx ts-node bin/gemini-multi-auth.js login <label>
+
+# For workspace accounts (auto-discovers project):
+npx ts-node bin/gemini-multi-auth.js login <label>
+
+# Or specify project explicitly:
+npx ts-node bin/gemini-multi-auth.js login <label> --project <project-id>
+
+# Show account pool status
+npx ts-node bin/gemini-multi-auth.js status
+
+# Pin/unpin account for rotation
+npx ts-node bin/gemini-multi-auth.js switch <account-id>
+
+# Remove account
+npx ts-node bin/gemini-multi-auth.js remove <account-id>
 ```
 
-### SillyTavern settings
+## Proxy Management
 
-Chat completion
-API Base URL http://127.0.0.1:11434/v1
+```bash
+# Start (background)
+./start.sh
 
+# Start (foreground, for debugging)
+./start.sh --foreground
 
+# Check status
+cat .proxy.pid && kill -0 $(cat .proxy.pid) && echo "Running"
 
-## License
+# Stop
+kill $(cat .proxy.pid)
 
-MIT – free for personal & commercial use. Forked from https://huggingface.co/engineofperplexity/gemini-openai-proxy
+# View logs
+tail -f proxy.log
+```
+
+## How It Works
+
+- **Multi-account rotation**: When pool has accounts, requests rotate between them with error-aware scoring (cooldown, error rate, LRU)
+- **Legacy fallback**: When pool is empty, falls back to single account from `~/.gemini/`
+- **Retry on errors**: Max 1 retry per request on 429/401/403 with different account
+- **Token management**: Tokens stored in `~/.gemini-multi-auth/tokens/`, pool in `~/.gemini-multi-auth/pool.json`
+
+## Models
+
+- `gemini-2.5-pro` (default)
+- Set `MODEL=gemini-2.5-flash` env var to override
