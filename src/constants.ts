@@ -21,3 +21,8 @@ export const BACKOFF_BASE_MS = 60_000;
 // ── Config file (remembers project per email) ──
 
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+
+// ── Ledger ──
+
+export const LEDGER_FILE = path.join(CONFIG_DIR, 'ledger.jsonl');
+export const HOURLY_BUDGET_WINDOW_MS = 60 * 60 * 1000;

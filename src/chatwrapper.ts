@@ -5,6 +5,7 @@ import { CodeAssistServer } from '@google/gemini-cli-core/dist/src/code_assist/s
 import { AccountPool } from './core/account-pool';
 import { Rotation } from './core/rotation';
 import { PoolEmptyError } from './types';
+import { Ledger } from './stats/ledger';
 
 const modelEnv = process.env.MODEL;
 console.log('Auth: CodeAssistServer (direct, no tool interception)');
@@ -16,6 +17,7 @@ let modelName: string = modelEnv ?? '';
 const pool = new AccountPool();
 pool.load();
 const rotation = new Rotation(pool);
+const ledger = new Ledger();
 
 // Map of accountId → { server, projectId, initPromise }
 const servers: Map<string, {
@@ -60,8 +62,21 @@ async function ensureServerForAccount(accountId: string): Promise<CodeAssistServ
           });
         }
 
+        // Set project ID for workspace accounts
+        const prevProject = process.env.GOOGLE_CLOUD_PROJECT;
+        if (account.projectId) {
+          process.env.GOOGLE_CLOUD_PROJECT = account.projectId;
+        }
+
         // Use OLD API: setupUser(authClient) returns string
         const projectId = await setupUser(authClient);
+
+        // Restore env
+        if (prevProject !== undefined) {
+          process.env.GOOGLE_CLOUD_PROJECT = prevProject;
+        } else {
+          delete process.env.GOOGLE_CLOUD_PROJECT;
+        }
 
         // Use OLD API: new CodeAssistServer(authClient, projectId, httpOptions)
         const server = new CodeAssistServer(authClient, projectId, httpOptions);
@@ -138,6 +153,7 @@ type GenConfig = Record<string, unknown>;
 export async function sendChat({ contents, generationConfig = {}, tools }: {
   contents: any[]; generationConfig?: GenConfig; tools?: unknown;
 }) {
+  const start = Date.now();
   let server: CodeAssistServer;
   let accountId: string | null = null;
 
@@ -169,6 +185,7 @@ export async function sendChat({ contents, generationConfig = {}, tools }: {
     // Record success if using rotation
     if (accountId) {
       rotation.recordSuccess(accountId);
+      ledger.record({ ts: Date.now(), aid: accountId, tokIn: (result as any).usageMetadata?.promptTokens ?? 0, tokOut: (result as any).usageMetadata?.candidatesTokens ?? 0, latency: Date.now() - start, err: null, model: modelName });
     }
 
     return result as any;
@@ -180,6 +197,7 @@ export async function sendChat({ contents, generationConfig = {}, tools }: {
         httpStatus: err.httpStatus ?? err.status ?? 0,
         message: err.message,
       });
+      ledger.record({ ts: Date.now(), aid: accountId, tokIn: 0, tokOut: 0, latency: Date.now() - start, err: err.message ?? 'unknown', model: modelName });
 
       try {
         const decision = rotation.pickAccount();
@@ -201,6 +219,7 @@ export async function sendChat({ contents, generationConfig = {}, tools }: {
 export async function* sendChatStream({ contents, generationConfig = {}, tools }: {
   contents: any[]; generationConfig?: GenConfig; tools?: unknown;
 }) {
+  const start = Date.now();
   let server: CodeAssistServer;
   let accountId: string | null = null;
 
@@ -232,6 +251,7 @@ export async function* sendChatStream({ contents, generationConfig = {}, tools }
     // Record success if using rotation
     if (accountId) {
       rotation.recordSuccess(accountId);
+      ledger.record({ ts: Date.now(), aid: accountId, tokIn: 0, tokOut: 0, latency: Date.now() - start, err: null, model: modelName });
     }
 
     for await (const chunk of stream) {
@@ -245,6 +265,7 @@ export async function* sendChatStream({ contents, generationConfig = {}, tools }
         httpStatus: err.httpStatus ?? err.status ?? 0,
         message: err.message,
       });
+      ledger.record({ ts: Date.now(), aid: accountId, tokIn: 0, tokOut: 0, latency: Date.now() - start, err: err.message ?? 'unknown', model: modelName });
 
       try {
         const decision = rotation.pickAccount();

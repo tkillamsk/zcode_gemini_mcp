@@ -60,3 +60,15 @@ export class AccountExhaustedError extends Error {
     this.accountId = accountId;
   }
 }
+
+// ── Ledger ──
+
+export interface LedgerEntry {
+  ts: number;       // timestamp ms
+  aid: string;      // account id
+  tokIn: number;    // prompt tokens
+  tokOut: number;   // completion tokens
+  latency: number;  // ms
+  err: string | null;
+  model: string;
+}

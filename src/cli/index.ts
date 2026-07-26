@@ -5,6 +5,10 @@ import { login } from './commands/login';
 import { status } from './commands/status';
 import { switchAccount } from './commands/switch';
 import { removeAccount } from './commands/remove';
+import { reportCommand } from './commands/report';
+import { checkCommand } from './commands/check';
+import { doctorCommand } from './commands/doctor';
+import { exportCommand, importCommand } from './commands/export-import';
 
 const program = new Command();
 
@@ -36,5 +40,11 @@ program
   .description('Remove an account from the pool')
   .argument('<id>', 'Account ID to remove')
   .action(removeAccount);
+
+reportCommand(program);
+checkCommand(program);
+doctorCommand(program);
+exportCommand(program);
+importCommand(program);
 
 program.parse();
