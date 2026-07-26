@@ -62,21 +62,8 @@ async function ensureServerForAccount(accountId: string): Promise<CodeAssistServ
           });
         }
 
-        // Set project ID for workspace accounts
-        const prevProject = process.env.GOOGLE_CLOUD_PROJECT;
-        if (account.projectId) {
-          process.env.GOOGLE_CLOUD_PROJECT = account.projectId;
-        }
-
         // Use OLD API: setupUser(authClient) returns string
         const projectId = await setupUser(authClient);
-
-        // Restore env
-        if (prevProject !== undefined) {
-          process.env.GOOGLE_CLOUD_PROJECT = prevProject;
-        } else {
-          delete process.env.GOOGLE_CLOUD_PROJECT;
-        }
 
         // Use OLD API: new CodeAssistServer(authClient, projectId, httpOptions)
         const server = new CodeAssistServer(authClient, projectId, httpOptions);
