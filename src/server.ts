@@ -1,6 +1,6 @@
 import http from 'http';
 import { sendChat, sendChatStream, listModels } from './chatwrapper';
-import { mapRequest, mapResponse, mapStreamChunk } from './mapper';
+import { mapRequest, mapResponse, createStreamMapper } from './mapper';
 
 /* ── basic config ─────────────────────────────────────────────────── */
 const PORT = Number(process.env.PORT ?? 11434);
@@ -24,7 +24,7 @@ function readJSON(
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch {
-        res.writeHead(400).end(); // malformed JSON
+        res.writeHead(400).end();
         resolve(null);
       }
     });
@@ -61,12 +61,11 @@ http
       if (!body) {
         res.writeHead(400).end();
         console.log('HTTP 400 Proxy error: malformed JSON');
-
         return;
       }
 
       try {
-        const { geminiReq, tools } = await mapRequest(body);
+        const { geminiReq } = await mapRequest(body);
 
         if (body.stream) {
           res.writeHead(200, {
@@ -77,20 +76,22 @@ http
 
           console.log('➜ sending HTTP 200 streamed response');
 
-          for await (const chunk of sendChatStream({ ...geminiReq, tools })) {
-            res.write(`data: ${JSON.stringify(mapStreamChunk(chunk))}\n\n`);
+          const mapper = createStreamMapper();
+          for await (const chunk of sendChatStream(geminiReq as any)) {
+            const mapped = mapper.mapChunk(chunk);
+            res.write(`data: ${JSON.stringify(mapped)}\n\n`);
           }
           res.end('data: [DONE]\n\n');
 
           console.log('➜ done sending streamed response');
         } else {
-          const gResp = await sendChat({ ...geminiReq, tools });
+          const gResp = await sendChat(geminiReq as any);
           const mapped = mapResponse(gResp);
-          const code = 200;
+          const code = mapped.error ? 500 : 200;
           res.writeHead(code, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(mapped));
 
-          console.log('✅ Replied HTTP ' + code + ' response', mapped);
+          console.log('✅ Replied HTTP ' + code + ' response');
         }
       } catch (err: any) {
         console.error('HTTP 500 Proxy error ➜', err);
